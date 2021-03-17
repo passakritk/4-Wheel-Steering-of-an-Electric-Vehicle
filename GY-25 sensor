@@ -1,0 +1,152 @@
+float Roll1,Pitch1,Yaw1,Roll2,Pitch2,Yaw2;
+unsigned char Re_buf1[8],counter1=0,Re_buf2[8],counter2=0;
+int val = 0;       // variable to store the value coming from the sensor
+int PWM = 0;
+int direct = 1 ;      // 0 is clockwise and 1 is counter-clockwise
+
+// PID parameter
+int angle = 0;
+int kp = 25 ;
+float ki = 0;
+float kd = 50;
+int error = 0;
+int error_old = 0;
+int d_error = 0;
+int i_error = 0;
+int ref = 0;
+
+// digital pin for control
+#define PwmForwardPin 6 
+#define DirForwardPin 10
+#define PwmBackwardPin 7 
+#define DirBackwardPin 11
+
+int Value;
+int PwmForward, PwmBackward;
+bool DirForward = LOW;
+bool DirBackward = LOW; 
+
+void setup() {
+
+  pinMode(PwmForwardPin,OUTPUT);
+  pinMode(DirForwardPin,OUTPUT); 
+  pinMode(PwmBackwardPin,OUTPUT);
+  pinMode(DirBackwardPin,OUTPUT);
+  
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  pinMode(MotorPin,OUTPUT);
+  pinMode(CC,OUTPUT);
+  pinMode(CW,OUTPUT);
+  Serial1.begin(115200);// SoftwareSerial can only support 9600 baud rate for GY 25 but Serial3 can support 115200 and 9600 both
+  Serial2.begin(115200);// SoftwareSerial can only support 9600 baud rate for GY 25 but Serial3 can support 115200 and 9600 both
+     
+  Serial1.write(0XA5);
+  Serial1.write(0X52);//
+  delay(500);
+  //Serial1.write(0XA5);
+  //Serial1.write(0X51);//0X51:query mode, return directly to the angle value, to be sent each read, 0X52:Automatic mode,send a direct return angle, only initialization
+     
+
+  Serial2.write(0XA5);
+  Serial2.write(0X52);//correction mode
+  delay(500);
+  //Serial2.write(0XA5);
+  //Serial2.write(0X52);//0X51:query mode, return directly to the angle value, to be sent each read, 0X52:Automatic mode,send a direct return angle, only initialization
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  serialEvent1();
+  serialEvent2();
+  Serial.print("\n");
+  ref = Pitch1;         // read the value of reference sensor front
+  
+  val = Pitch2*2;         // read the value from the sensor rare wheel
+ // Serial.print("  Pitch1: ");
+  Serial.print(Pitch1);
+  Serial.print(";");
+  Serial.print(Pitch2);
+   
+  error = ref - val; 
+  i_error = i_error + error; 
+  d_error = error_old-error;
+  error_old = error;
+ 
+  PWM = kp*error + ki*i_error + kd*d_error;
+  
+  if (PWM > 255){
+    PWM = 255;
+  }
+  else if (PWM<-255){
+    PWM = -255;
+  }
+    
+  if (PWM < 0){
+    direct = 1;
+   }
+   else {
+    direct = 0;
+   }
+//Serial.print(" direction : ");
+//Serial.print(direct);
+  if (direct == 0){
+    //Serial.println("Clockwise rotation");             
+    DirForward  = HIGH;
+    DirBackward = HIGH;
+    PwmForward  = abs(PWM);
+    digitalWrite(DirForwardPin,DirForward); 
+    analogWrite(PwmForwardPin, PwmForward);
+    PwmForward = 0; //clear value
+  }
+  else {
+    //Serial.println("Counter-Clockwise rotation");     
+    DirForward  = HIGH;
+    DirBackward = HIGH;
+    PwmBackward = abs(PWM); 
+    digitalWrite(DirBackwardPin,DirBackward);
+    analogWrite(PwmBackwardPin, PwmBackward);
+    PwmBackward = 0; //clear value 
+  }
+}
+
+void serialEvent1() {
+  //Serial1.write(0XA5);
+  //Serial1.write(0X51);//send it for each read
+  while (Serial1.available()) {  
+    Re_buf1[counter1]=(unsigned char)Serial1.read();
+    if(counter1==0&&Re_buf1[0]!=0xAA) return;      
+    counter1++;      
+    if(counter1==8)              
+     {  
+      counter1=0;                
+      if(Re_buf1[0]==0xAA && Re_buf1[7]==0x55)  // data package is correct    
+        {        
+         Yaw1=(int16_t)(Re_buf1[1]<<8|Re_buf1[2])/100.00;  
+         Pitch1=(int16_t)(Re_buf1[3]<<8|Re_buf1[4])/100.00;
+         Roll1=(int16_t)(Re_buf1[5]<<8|Re_buf1[6])/100.00;
+        }    
+     }
+  }
+}
+
+void serialEvent2() {
+  //Serial2.write(0XA5);
+  //Serial2.write(0X51);//send it for each read
+  while (Serial2.available()) {  
+    Re_buf2[counter2]=(unsigned char)Serial2.read();
+    if(counter2==0&&Re_buf2[0]!=0xAA) return;      
+    counter2++;      
+    if(counter2==8)              
+    {  
+      counter2=0;                
+      if(Re_buf2[0]==0xAA && Re_buf2[7]==0x55)  // data package is correct    
+        {        
+         Yaw2=(int16_t)(Re_buf2[1]<<8|Re_buf2[2])/100.00;  
+         Pitch2=(int16_t)(Re_buf2[3]<<8|Re_buf2[4])/100.00;
+         Roll2=(int16_t)(Re_buf2[5]<<8|Re_buf2[6])/100.00;
+        }    
+    }
+  }
+}
+
